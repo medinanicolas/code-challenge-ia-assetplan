@@ -8,36 +8,45 @@ from langchain.messages import SystemMessage
 
 from app.core.llm import model
 from app.agents.booking.state import BookingState
-from app.agents.booking.tools import check_availability, schedule_appointment, transfer_to_parent
+from app.agents.booking.tools import (
+    check_availability,
+    schedule_appointment,
+    transfer_to_parent,
+)
 from app.agents.booking.prompts import booking_system_prompt
 
 booking_tools = [check_availability, schedule_appointment, transfer_to_parent]
 
 booking_prompt_template = ChatPromptTemplate(
-    [
-        SystemMessage(booking_system_prompt),
-        MessagesPlaceholder("messages")
-    ]
+    [SystemMessage(booking_system_prompt), MessagesPlaceholder("messages")]
 )
 
 booking_with_tools = model.bind_tools(booking_tools)
 booking_chain = booking_prompt_template | booking_with_tools
 
+
 def should_continue(state: BookingState):
+    """Check if the booking process needs to execute tools."""
     messages = state["messages"]
     last_message = messages[-1]
     if last_message.tool_calls:
         return "tool_node"
     return END
 
+
 booking_tool_node = ToolNode(booking_tools)
 
+
 async def booking_run_tool_node(state: BookingState, **kwargs) -> Command[Literal[END]]:
+    """Execute the booking tools."""
     return await booking_tool_node.ainvoke(state, **kwargs)
 
+
 async def booking(state: BookingState):
+    """Invoke the booking chain."""
     result = await booking_chain.ainvoke(state["messages"])
     return {"messages": [result]}
+
 
 checkpointer = InMemorySaver()
 
