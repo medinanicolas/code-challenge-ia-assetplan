@@ -10,6 +10,7 @@ async def check_availability(date: str):
     Args:
         date: Date to verify (Convert to ISO format)"""
     try:
+        print(f"[DEBUG] Action: check_availability | Date: {date}")
         if random.randint(0, 1) == 0:
             return {"status": "not available"}
         return {"status": "available"}
@@ -27,6 +28,9 @@ async def schedule_appointment(date: str, name: str, pet_name: str, reason: str)
         pet_name: The pet name
         reason: The reason of the appointment"""
     try:
+        print(
+            f"[DEBUG] Action: schedule_appointment | Date: {date}, Name: {name}, Pet: {pet_name}, Reason: {reason}"
+        )
         return {"status": f"scheduled to {date}"}
     except Exception as e:
         return {"status": f"Error scheduling appointment: {str(e)}"}

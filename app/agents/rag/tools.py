@@ -8,6 +8,7 @@ async def get_relevant_documents(query: str):
     Args:
         query: La solicitud del usuario"""
     try:
+        print(f"[DEBUG] Action: get_relevant_documents | Query: {query}")
         if final_retriever:
             docs = final_retriever.invoke(query)
             return {"documents": [doc.page_content for doc in docs]}

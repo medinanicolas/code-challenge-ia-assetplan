@@ -3,7 +3,12 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
 from typing import Literal
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from datetime import datetime
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    MessagesPlaceholder,
+    SystemMessagePromptTemplate,
+)
 from langchain.messages import SystemMessage
 
 from app.core.llm import model
@@ -18,7 +23,10 @@ from app.agents.booking.prompts import booking_system_prompt
 booking_tools = [check_availability, schedule_appointment, transfer_to_parent]
 
 booking_prompt_template = ChatPromptTemplate(
-    [SystemMessage(booking_system_prompt), MessagesPlaceholder("messages")]
+    [
+        SystemMessagePromptTemplate.from_template(booking_system_prompt),
+        MessagesPlaceholder("messages"),
+    ]
 )
 
 booking_with_tools = model.bind_tools(booking_tools)
@@ -44,7 +52,10 @@ async def booking_run_tool_node(state: BookingState, **kwargs) -> Command[Litera
 
 async def booking(state: BookingState):
     """Invoke the booking chain."""
-    result = await booking_chain.ainvoke(state["messages"])
+    current_time = datetime.now().isoformat()
+    result = await booking_chain.ainvoke(
+        {"current_time": current_time, "messages": state["messages"]}
+    )
     return {"messages": [result]}
 
 

@@ -13,6 +13,7 @@ async def transfer_to_rag_agent(
 ) -> Command[Literal["router"]]:
     """Ask rag agent for help"""
     try:
+        print(f"[DEBUG] Action: transfer_to_rag_agent | Query: {user_query}")
         result = await rag_graph.ainvoke({"messages": [HumanMessage(user_query)]})
         last_message = result["messages"][-1]
         content = last_message.content
@@ -40,6 +41,7 @@ async def human_escape_hatch(
     Args:
         reason: Why the user wants to talk to a human agent"""
     try:
+        print(f"[DEBUG] Action: human_escape_hatch | Reason: {reason}")
         content = str({"status": "created", "message": "Ticket has been created"})
     except Exception as e:
         content = f"Error creating ticket: {str(e)}"

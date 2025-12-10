@@ -9,7 +9,14 @@ from rich.text import Text
 from rich.console import Group
 from rich.rule import Rule
 
-def create_handoff_tool(*, name: str, agent_name: str, graph: Literal["child", "parent"], description: str | None = None):
+
+def create_handoff_tool(
+    *,
+    name: str,
+    agent_name: str,
+    graph: Literal["child", "parent"],
+    description: str | None = None,
+):
     if description is None:
         description = f"Ask agent '{name}' for help"
 
@@ -19,6 +26,7 @@ def create_handoff_tool(*, name: str, agent_name: str, graph: Literal["child", "
         tool_call_id: Annotated[str, InjectedToolCallId],
     ):
         f"""Transfer the control to {name} agent"""
+        print(f"[DEBUG] Action: handoff_to_agent | To: {agent_name}")
         tool_message = ToolMessage(
             content=f"Successfully transferred to {agent_name} agent",
             name=name,
@@ -27,9 +35,14 @@ def create_handoff_tool(*, name: str, agent_name: str, graph: Literal["child", "
         return Command(
             goto=agent_name,
             graph=Command.PARENT if graph == "parent" else None,
-            update={"messages": state["messages"] + [tool_message], "active_agent": agent_name}
+            update={
+                "messages": state["messages"] + [tool_message],
+                "active_agent": agent_name,
+            },
         )
+
     return handoff_to_agent
+
 
 def print_debug_event(event):
     """
@@ -39,12 +52,12 @@ def print_debug_event(event):
     path, chunk = event
 
     # 1. Extracción de Datos
-    event_type = chunk.get('type')
-    payload = chunk.get('payload', {})
-    step = chunk.get('step', 'N/A')
+    event_type = chunk.get("type")
+    payload = chunk.get("payload", {})
+    step = chunk.get("step", "N/A")
 
     # Timestamp simple
-    ts_str = chunk.get('timestamp', '')
+    ts_str = chunk.get("timestamp", "")
     try:
         ts_dt = parser.parse(ts_str)
         timestamp = ts_dt.strftime("%H:%M:%S")
@@ -55,31 +68,33 @@ def print_debug_event(event):
     if len(path) == 0:
         graph_scope = "ROOT"
     else:
-        current_subgraph = path[-1].split(':')[0].upper()
+        current_subgraph = path[-1].split(":")[0].upper()
         graph_scope = f"SUB:{current_subgraph}"
 
-    node_name = payload.get('name', 'System')
+    node_name = payload.get("name", "System")
 
     # ---------------------------------------------------------
     # CASO A: Eventos de Sistema (Checkpoints, Task Start)
     # USAMOS print() NORMAL para evitar saltos de línea HTML en Jupyter
     # ---------------------------------------------------------
-    if event_type in ['checkpoint', 'task']:
-        icon = "💾" if event_type == 'checkpoint' else "🎬"
+    if event_type in ["checkpoint", "task"]:
+        icon = "💾" if event_type == "checkpoint" else "🎬"
         # Imprimimos texto plano para que quede compacto
-        print(f"{timestamp} | {graph_scope:<8} | Step: {step:<2} | {icon} {event_type.upper()} -> Node: {node_name}")
+        print(
+            f"{timestamp} | {graph_scope:<8} | Step: {step:<2} | {icon} {event_type.upper()} -> Node: {node_name}"
+        )
         return
 
     # ---------------------------------------------------------
     # CASO B: Resultado de Tarea (Paneles con Rich)
     # ---------------------------------------------------------
-    if event_type == 'task_result':
-        result = payload.get('result', {})
+    if event_type == "task_result":
+        result = payload.get("result", {})
 
         if not result or not isinstance(result, dict):
             return
 
-        messages = result.get('messages', [])
+        messages = result.get("messages", [])
         if not isinstance(messages, list):
             messages = [messages]
 
@@ -131,16 +146,18 @@ def print_debug_event(event):
 
         # Footer
         footer = ""
-        if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
+        if hasattr(msg, "usage_metadata") and msg.usage_metadata:
             u = msg.usage_metadata
             footer = f"💎 Usage: {u.get('total_tokens')} tokens"
 
         # Imprimir Panel (Esto sí usa HTML, pero como es un bloque grande, el margen no molesta)
-        rprint(Panel(
-            Group(*content_display),
-            title=f"[bold {border_color}]{title}[/]",
-            subtitle=f"[grey42]{footer}[/]",
-            border_style=border_color,
-            padding=(0, 2), # Padding vertical reducido
-            expand=False
-        ))
+        rprint(
+            Panel(
+                Group(*content_display),
+                title=f"[bold {border_color}]{title}[/]",
+                subtitle=f"[grey42]{footer}[/]",
+                border_style=border_color,
+                padding=(0, 2),  # Padding vertical reducido
+                expand=False,
+            )
+        )
