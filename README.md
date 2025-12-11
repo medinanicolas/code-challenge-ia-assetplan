@@ -65,7 +65,7 @@ Para lograr esto, se implementó el siguiente enfoque:
 
 *   Se utilizó un [entrypoint condicional](https://docs.langchain.com/oss/python/langgraph/graph-api#conditional-edges) para dirigir la interacción del usuario hacia el agente activo.
 
-*   Se implementó un sistema de guardrails para detectar y prevenir posibles situaciones inapropiadas. No se usó un Middleware ya que la documentación solo muestra ejemplos de uso con `create_agent`, el cual es un `CompiledGraph` y por lo tanto tiene su propio `ToolNode` interno, el cual ejecuta la función y devuelve el resultado. Lo que dificulta el `Handoff` hacia el agente Booking.
+*   Se implementó un sistema de guardrails para detectar y prevenir posibles situaciones inapropiadas. No se usó un Middleware ya que la documentación solo muestra ejemplos de uso con [create_agent](https://docs.langchain.com/oss/python/langchain/agents), el cual es un `CompiledStateGraph` y que además tiene su propio `ToolNode` interno, el cual ejecuta la función y devuelve el resultado. Lo que dificulta el `Handoff` hacia el agente Booking.
 
 #### ¿Por qué no se utilizaron solo los componentes built-in de alto nivel de LangChain/LangGraph?
 
@@ -113,7 +113,7 @@ Adicionalmente, se utilizó `Query enhancement` para asistir al algoritmo BM25 e
 
 ## Observabilidad
 
-Se utilizo [LangSmith](https://smith.langchain.com/) para observar el flujo de la aplicación.
+Se utilizó [LangSmith](https://smith.langchain.com/) para observar el flujo de la aplicación.
 
 ## Notas finales
 
