@@ -79,6 +79,8 @@ Se seleccionó `GPT-5-mini` para el OCR del PDF tras realizar pruebas en el play
 
 El pre-procesamiento de documentos se realizó en [RAG-preprocessing.ipynb](./notebooks/RAG-preprocessing.ipynb).
 
+> **Nota de Ingesta:** La base de conocimiento ya ha sido generada e incluida en el repositorio (ver carpeta `data/`). No es necesario ejecutar procesos de ingesta para levantar el proyecto. Los notebooks se incluyen solo como referencia del trabajo realizado manualmente.
+
 ### Chunking y VectorStore
 
 Se eligió un enfoque de [ParentDocumentRetriever](https://medium.aiplanet.com/advanced-rag-providing-broader-context-to-llms-using-parentdocumentretriever-cc627762305a) con búsqueda híbrida. Se combinó la búsqueda por similitud de vectores con el algoritmo BM25 mediante `EnsembleRetriever`, privilegiando levemente la búsqueda vectorial.
