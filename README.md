@@ -115,6 +115,13 @@ Adicionalmente, se utilizó `Query enhancement` para asistir al algoritmo BM25 e
 
 Se utilizó [LangSmith](https://smith.langchain.com/) para observar el flujo de la aplicación.
 
+## ¿Dónde se usó "Vibe-Coding"?
+
+* Gran parte de la ingesta de datos se hizo mediante "Vibe-Coding", ya que su implementación es bastante estándar y replicable.
+* Muchos de los prompts fueron generados y mejorados en un proceso iterativo.
+* Tareas repetitivas como creación de carpetas y archivos, así como importación de librerías.
+* La UI de Streamlit se modificó a partir de este [template](https://llm-examples.streamlit.app/?ref=streamlit-io-gallery-llms).
+
 ## Notas finales
 
 Algunos aspectos no pulidos se relacionan con el comportamiento inherente del modelo, lo cual requeriría un proceso iterativo de prueba y corrección más extenso. Se considera que el prompt engineering podría mejorar varios de estos puntos. Sin embargo, la base actual es sólida y escalable. 
