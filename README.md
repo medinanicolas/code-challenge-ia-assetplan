@@ -109,13 +109,9 @@ Adicionalmente, se utilizó `Query enhancement` para asistir al algoritmo BM25 e
     *   Modelo ultra ligero y rápido.
     *   Utilizado para tareas de clasificación (Guardrails).
 
+## Observabilidad
 
-## Puntos pendientes
-
-Queda pendiente para futuras iteraciones la implementación de nodos de [HybridRAG](https://docs.langchain.com/oss/python/langchain/retrieval#hybrid-rag).
-
-En futuros proyectos se podría evaluar el uso de [GraphRAG](https://neo4j.com/blog/genai/what-is-graphrag/).
-
+Se utilizo [LangSmith](https://smith.langchain.com/) para observar el flujo de la aplicación.
 
 ## Notas finales
 
