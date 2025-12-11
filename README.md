@@ -1,85 +1,122 @@
-# Agente Conversacional para Clínica Veterinaria Virtual "VetCare AI"
+# VetCare AI (Challenge IA AssetPlan)
+
+## Instalación y Ejecución
+
+Sigue estos pasos para instalar y ejecutar el chatbot en tu entorno local.
+
+### Prerrequisitos
+
+*   **Python**: 3.13 o superior.
+*   **Gestor de paquetes**: [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+### Instalación
+
+1.  **Clonar el repositorio**
+
+    ```bash
+    git clone https://github.com/medinanicolas/code-challenge-ia-assetplan.git
+    cd code-challenge-ia-assetplan
+    ```
+
+2.  **Instalar dependencias**
+
+    ```bash
+    uv sync
+    ```
+
+### Configuración
+
+Copia el archivo de ejemplo `.env.example` a `.env` y edítalo con tus propias credenciales:
+
+```bash
+cp .env.example .env
+```
+
+### Ejecutar el Chatbot
+
+Para levantar la interfaz de usuario:
+
+```bash
+uv run streamlit run app/ui/streamlit_app.py
+```
+
+---
+
+## LangChain o LangGraph
+
+Para este desafío utilicé LangGraph, ya que considero que ofrece un enfoque mucho más robusto que LangChain para chatbots, el cual suelo utilizar principalmente para flujos de trabajo estáticos que no requieren una interacción continua con el usuario.
+
+## Arquitectura
+
+Como arquitectura me basé principalmente en los patrones de [Multi-Agent](https://docs.langchain.com/oss/python/langchain/multi-agent) listados en la documentación oficial, como son [Tool Calling](https://docs.langchain.com/oss/python/langchain/multi-agent#tool-calling) y [Handoffs](https://docs.langchain.com/oss/python/langchain/multi-agent#handoffs). Aunque este último, al día de hoy (7 Dic 25), todavía no está documentado oficialmente, su implementación se puede encontrar en el código fuente de sistemas como [Swarm](https://github.com/langchain-ai/langgraph-swarm-py) y [Supervisor](https://github.com/langchain-ai/langgraph-supervisor-py).
+
+Esto se fundamenta en los siguientes puntos:
+
+1.  Consideré importante que el Router respondiera a inputs sencillos como "Hola", sin necesidad de que su única función fuera entregar el siguiente nodo mediante un output estructurado. Si bien sospecho que implementaciones actuales como `create_agent` lo realizan internamente mediante `Tool Calling`, se buscaba habilitar también el punto 2.
+2.  Se buscaba que el Router transfiriera el control total de la interacción con el usuario al agente de Booking.
+
+Para lograr esto, se implementó el siguiente enfoque:
+
+*   Por un lado, se utilizó [Tool Calling](https://docs.langchain.com/oss/python/langchain/multi-agent#tool-calling) para el agente RAG, dado que este no requiere interactuar directamente con el usuario, sino utilizar la solicitud para buscar información relevante, procesarla y devolverla.
+
+*   Por otro lado, se empleó [Handoff](https://docs.langchain.com/oss/python/langchain/multi-agent#handoffs) para el agente de Booking. Si bien este devuelve el resultado de la interacción al agente coordinador, también permite mantener al agente de Booking como el activo.
+
+*   Se implementó una propiedad de estado (`active_agent`) basada en [Swarm](https://github.com/langchain-ai/langgraph-swarm-py) para mantener la interacción del usuario con el agente correspondiente.
+
+*   Se utilizó un [entrypoint condicional](https://docs.langchain.com/oss/python/langgraph/graph-api#conditional-edges) para dirigir la interacción del usuario hacia el agente activo.
+
+*   Se implementó un sistema de guardrails para detectar y prevenir posibles situaciones inapropiadas. No se usó un Middleware ya que la documentación solo muestra ejemplos de uso con `create_agent`, el cual es un `CompiledGraph` y por lo tanto tiene su propio `ToolNode` interno, el cual ejecuta la función y devuelve el resultado. Lo que dificulta el `Handoff` hacia el agente Booking.
+
+#### ¿Por qué no se utilizaron solo los componentes built-in de alto nivel de LangChain/LangGraph?
+
+> En primer lugar, las opciones built-in pueden limitar los flujos complejos. En segundo lugar, el código base ha evolucionado significativamente, destacando el último release de [LangChain v1](https://docs.langchain.com/oss/python/releases/langchain-v1), donde muchas funcionalidades, especialmente de la comunidad, se encuentran en paquetes separados o [legados](https://reference.langchain.com/python/langchain_classic/).
+
+## Sistema RAG
+
+### Procesamiento de documentos
+
+Se seleccionó `GPT-5-mini` para el OCR del PDF tras realizar pruebas en el playground y revisar la tabla de precios de los modelos actuales de OpenAI.
+
+El pre-procesamiento de documentos se realizó en [RAG-preprocessing.ipynb](./notebooks/RAG-preprocessing.ipynb).
+
+### Chunking y VectorStore
+
+Se eligió un enfoque de [ParentDocumentRetriever](https://medium.aiplanet.com/advanced-rag-providing-broader-context-to-llms-using-parentdocumentretriever-cc627762305a) con búsqueda híbrida. Se combinó la búsqueda por similitud de vectores con el algoritmo BM25 mediante `EnsembleRetriever`, privilegiando levemente la búsqueda vectorial.
+
+Se optó por este enfoque debido a:
+
+1.  Permite que los documentos hijos sean específicos, manteniendo el contexto mediante sus documentos padres.
+2.  La búsqueda por similitud de vectores es potente, pero puede ser generalista en temas cercanos (e.g., "salud de perros" vs "salud de gatos"). El algoritmo BM25 ayuda a diferenciar mediante palabras clave exactas.
+3.  El re-ranking permite refinar los resultados obtenidos.
+
+Para el VectorStore se utilizó ChromaDB.
+
+El chunking e indexación se encuentran en [RAG](./notebooks/RAG.ipynb).
+
+### Retriever
+
+Se añadió un algoritmo de re-ranking, el cual asegura la calidad de los datos recuperados. Si bien conlleva un mayor costo computacional, el modelo [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) presenta un rendimiento superior en contextos multilenguaje.
+
+Adicionalmente, se utilizó `Query enhancement` para asistir al algoritmo BM25 en la recuperación de documentos.
+
+## Modelos usados y alternativas
+
+*   **GPT-5-mini**:
+    *   Velocidad moderada.
+    *   Resultados superiores a versiones anteriores en tool calls.
+    *   Costo eficiente.
+*   **GPT-5-nano**:
+    *   Modelo ultra ligero y rápido.
+    *   Utilizado para tareas de clasificación (Guardrails).
 
 
-### **1. Resumen Ejecutivo**
+## Puntos pendientes
 
-El objetivo de este proyecto es desarrollar un agente conversacional de IA para una clínica veterinaria virtual. Este agente, llamado "VetCare AI", servirá como el primer punto de contacto para los clientes, ayudándoles con dudas generales sobre el cuidado de sus mascotas y agendando citas.
+Queda pendiente para futuras iteraciones la implementación de nodos de [HybridRAG](https://docs.langchain.com/oss/python/langchain/retrieval#hybrid-rag).
 
-Este desafío está diseñado para evaluar tu habilidad en la construcción de sistemas de IA complejos utilizando el ecosistema de LangChain, tu comprensión de arquitecturas de agentes y tu capacidad para integrar diferentes componentes (RAG, herramientas, APIs) en una solución cohesiva.
+En futuros proyectos se podría evaluar el uso de [GraphRAG](https://neo4j.com/blog/genai/what-is-graphrag/).
 
-### **2. Objetivo del Proyecto**
 
-Crear un prototipo funcional de un agente conversacional multi-agente capaz de:
-1.  Responder preguntas sobre el cuidado de mascotas utilizando una base de conocimientos.
-2.  Agendar citas, recopilando la información necesaria y verificando la disponibilidad.
-3.  Detectar cuándo un usuario necesita atención humana y escalar la conversación.
+## Notas finales
 
-### **3. Requisitos Funcionales (Core Features)**
-
-El sistema debe estar orquestado como un sistema multi-agente, donde un agente principal (o un router) dirige las solicitudes del usuario al agente especializado correcto.
-
-#### **3.1. Agente de Consultas Generales (Agente RAG)**
-Este agente será responsable de responder preguntas generales sobre el cuidado de las mascotas.
-
-*   **Funcionalidad:** Debe utilizar un enfoque de **Retrieval-Augmented Generation (RAG)**.
-*   **Base de Conocimientos:** Se te proporcionará una carpeta llamada `info-mascotas` que contiene varios documentos de texto. El agente debe usar estos documentos como su única fuente de verdad para responder a las preguntas.
-*   **Comportamiento Esperado:**
-    *   El usuario realiza una pregunta (p. ej., "¿Con qué frecuencia debo bañar a mi perro?").
-    *   El agente busca la información más relevante en los documentos de la base de conocimientos.
-    *   Utilizando la información recuperada, genera una respuesta coherente y útil en lenguaje natural.
-    *   Si no encuentra información relevante, debe indicarlo claramente al usuario (p. ej., "Lo siento, no tengo información sobre ese tema específico").
-
-#### **3.2. Agente de Agendamiento de Citas (Agente con Herramientas)**
-Este agente se activará cuando el usuario exprese la intención de agendar una visita.
-
-*   **Recopilación de Datos:** El agente debe recopilar la siguiente información del usuario de manera conversacional:
-    *   **Datos del Dueño:** Nombre completo, número de teléfono, email.
-    *   **Datos de la Mascota:** Nombre, especie (perro, gato, etc.), raza (si aplica), edad.
-    *   **Motivo de la Consulta:** Una breve descripción del motivo de la visita.
-*   **Coordinación de Horarios:**
-    *   El agente debe preguntar al usuario por el día y la hora deseados para la cita.
-    *   Debe utilizar una **herramienta (Tool)** para verificar la disponibilidad.
-*   **Simulación de API de Disponibilidad:**
-    *   No necesitas construir una API real. Debes implementar una función que simule esta API.
-    *   **`check_availability(dia: str, hora: str) -> bool`**: Esta función recibirá un día y una hora y deberá devolver `True` (disponible) o `False` (no disponible) de forma **aleatoria**.
-    *   Si la hora solicitada no está disponible, el agente debe informar al usuario y sugerirle que pruebe con otra fecha/hora.
-*   **Confirmación:** Una vez que se encuentra un horario disponible y se han recopilado todos los datos, el agente debe confirmar la cita con el usuario, resumiendo toda la información.
-
-#### **3.3. Mecanismo de Escalación a Humano ("Escape Hatch")**
-El sistema debe ser capaz de reconocer cuándo la conversación debe ser transferida a un agente humano.
-
-*   **Detección de Intención:** El agente principal (o un agente de triage) debe analizar el sentimiento del usuario o buscar frases explícitas como "quiero hablar con una persona", "conectar con un humano", "estoy frustrado con este bot", etc.
-*   **Simulación de API de Escalación:**
-    *   Al detectar la necesidad de escalación, el sistema debe llamar a una **herramienta (Tool)** que simule una llamada a una API para solicitar atención humana.
-    *   **`request_human_agent(user_info: dict)`**: Esta función recibirá los datos del usuario y simulará la creación de un ticket de soporte. Para este desafío, es suficiente con que la función imprima un mensaje en la consola, como: `TICKET CREADO: El usuario [Nombre del usuario] en el [teléfono] ha solicitado atención humana.`
-
-### **4. Requisitos Técnicos y Arquitectónicos**
-
-*   **Lenguaje:** Python.
-*   **Framework Principal:** **LangChain**. Se recomienda encarecidamente el uso de **LangGraph** para orquestar el flujo entre los diferentes agentes.
-*   **Modelo de Lenguaje (LLM):** Utiliza los modelos de OpenAI. Se te proporcionará una clave de API con crédito suficiente para el desarrollo y las pruebas.
-*   **Vector Store (para RAG):** Eres libre de elegir la biblioteca que prefieras para crear los embeddings y el índice vectorial (p. ej., ChromaDB, FAISS, etc.).
-*   **Interfaz:** La interfaz de usuario no es el foco principal. Puedes optar por:
-    *   Un **CLI (Command-Line Interface)** interactivo.
-    *   (Opcional) Una interfaz web simple usando **Streamlit** o **Gradio**, si te sientes cómodo con ello.
-
-### **5. Entregables**
-
-1.  **Código Fuente:** El código completo de tu proyecto.
-    *   Debe ser entregado en un repositorio Git (p. ej., GitHub, GitLab), al cual nos darás acceso.
-2.  **Documentación (`README.md`):** Un archivo `README.md` claro y completo en la raíz del repositorio que incluya:
-    *   Una breve descripción del proyecto.
-    *   Instrucciones detalladas sobre cómo configurar el entorno virtual e instalar las dependencias (p. ej., un archivo `requirements.txt`).
-    *   Instrucciones claras sobre cómo ejecutar la aplicación.
-    *   Una breve explicación de tus **decisiones arquitectónicas**: ¿Cómo estructuraste los agentes? ¿Por qué elegiste esa estructura? ¿Cómo funciona el flujo en LangGraph (si lo usaste)?
-
-### **6. Criterios de Evaluación**
-
-Serás evaluado/a en base a los siguientes criterios:
-
-*   **Funcionalidad:** ¿El agente cumple con todos los requisitos funcionales descritos en este documento?
-*   **Calidad de la Arquitectura:** La lógica y la solidez del diseño de tu sistema multi-agente. La claridad en la separación de responsabilidades entre los agentes.
-*   **Calidad del Código:** Legibilidad, modularidad, eficiencia y adherencia a las buenas prácticas de Python.
-*   **Uso de LangChain/LangGraph:** Tu capacidad para utilizar las herramientas del ecosistema de LangChain de manera efectiva e idiomática.
-*   **Documentación:** La claridad y exhaustividad de tu archivo `README.md`. Un buen `README` es fundamental.
-*   **(Bonus) Robustez:** ¿Cómo manejas los errores y los casos límite? (p. ej., entradas de usuario ambiguas, fallos en la simulación de API, etc.).
+Algunos aspectos no pulidos se relacionan con el comportamiento inherente del modelo, lo cual requeriría un proceso iterativo de prueba y corrección más extenso. Se considera que el prompt engineering podría mejorar varios de estos puntos. Sin embargo, la base actual es sólida y escalable. 

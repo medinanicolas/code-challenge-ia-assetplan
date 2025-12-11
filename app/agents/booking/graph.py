@@ -11,7 +11,7 @@ from langchain_core.prompts import (
 )
 from langchain.messages import SystemMessage
 
-from app.core.llm import model
+from app.core.llm import gpt_5_mini
 from app.agents.booking.state import BookingState
 from app.agents.booking.tools import (
     check_availability,
@@ -29,7 +29,7 @@ booking_prompt_template = ChatPromptTemplate(
     ]
 )
 
-booking_with_tools = model.bind_tools(booking_tools)
+booking_with_tools = gpt_5_mini.bind_tools(booking_tools)
 booking_chain = booking_prompt_template | booking_with_tools
 
 

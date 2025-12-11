@@ -4,18 +4,27 @@ from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
 from typing import Literal
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.messages import SystemMessage
+from langchain.messages import AIMessage, SystemMessage
 
-from app.core.llm import model
+from app.core.llm import gpt_5_mini, gpt_5_nano
 from app.agents.router.state import RouterState, default_active_agent
 from app.agents.router.tools import (
     transfer_to_rag_agent,
     transfer_to_booking_agent,
     human_escape_hatch,
 )
-from app.agents.router.prompts import coordinator_system_prompt
+from app.agents.router.prompts import (
+    coordinator_system_prompt,
+    guardrail_system_prompt,
+    explanation_system_prompt,
+)
 from app.agents.booking.graph import booking_graph
 from app.agents.rag.graph import rag_graph
+from pydantic import BaseModel
+
+guardrail_prompt_template = ChatPromptTemplate(
+    [SystemMessage(guardrail_system_prompt), MessagesPlaceholder("messages")]
+)
 
 router_tools = [transfer_to_rag_agent, transfer_to_booking_agent, human_escape_hatch]
 
@@ -23,8 +32,40 @@ router_prompt_template = ChatPromptTemplate(
     [SystemMessage(coordinator_system_prompt), MessagesPlaceholder("messages")]
 )
 
-router_with_tools = model.bind_tools(router_tools)
+
+class GuardrailOutput(BaseModel):
+    is_inapropiate: bool
+    response: str
+
+
+guardrail_chain = guardrail_prompt_template | gpt_5_nano.with_structured_output(
+    GuardrailOutput
+)
+
+explanation_chain = (
+    ChatPromptTemplate(
+        [SystemMessage(explanation_system_prompt), MessagesPlaceholder("messages")]
+    )
+    | gpt_5_nano
+)
+
+router_with_tools = gpt_5_mini.bind_tools(router_tools)
 router_chain = router_prompt_template | router_with_tools
+
+
+async def guardrail(state: RouterState):
+    """Apply guardrails to the conversation."""
+    print(f"[DEBUG] Guardrail check started for latest message.")
+    result: GuardrailOutput = await guardrail_chain.ainvoke({"messages": state["messages"]})  # type: ignore
+
+    if result.is_inapropiate:
+        print(f"[DEBUG] Guardrail BLOCKED conversation. Risk detected.")
+        explanation = await explanation_chain.ainvoke({"messages": state["messages"]})
+        print(f"[DEBUG] Generated explanation: {explanation.content[:50]}...")
+        return Command(goto=END, update={"messages": AIMessage(explanation.content)})
+
+    print(f"[DEBUG] Guardrail PASSED. Proceeding.")
+    return state
 
 
 def should_continue(state: RouterState):
@@ -39,7 +80,7 @@ def should_continue(state: RouterState):
 
 async def router(state: RouterState):
     """Invoke the router chain (LLM with tools)."""
-    result = await router_chain.ainvoke(state["messages"])
+    result = await router_chain.ainvoke({"messages": state["messages"]})
     return {"messages": [result]}
 
 
@@ -60,12 +101,14 @@ async def router_run_tool_node(
 
 
 router_builder = StateGraph(RouterState)
+router_builder.add_node("guardrail", guardrail)
 router_builder.add_node("router", router)
 router_builder.add_node("booking", booking_graph)
 router_builder.add_node("rag", rag_graph)
 router_builder.add_node("tool_node", router_run_tool_node)
+router_builder.add_edge(START, "guardrail")
 router_builder.add_conditional_edges(
-    START, route_active_agent, ["router", "booking", END]
+    "guardrail", route_active_agent, ["router", "booking", END]
 )
 router_builder.add_conditional_edges("router", should_continue, ["tool_node", END])
 router_graph = router_builder.compile(name="router_graph", checkpointer=InMemorySaver())

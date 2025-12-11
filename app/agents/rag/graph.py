@@ -3,7 +3,7 @@ from langgraph.prebuilt import ToolNode
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.messages import SystemMessage, ToolMessage
 
-from app.core.llm import model
+from app.core.llm import gpt_5_mini
 from app.agents.rag.state import RagState
 from app.agents.rag.tools import get_relevant_documents
 from app.agents.rag.prompts import rag_system_prompt
@@ -15,7 +15,7 @@ rag_prompt_template = ChatPromptTemplate(
     [SystemMessage(rag_system_prompt), MessagesPlaceholder("messages")]
 )
 
-rag_with_tools = model.bind_tools(rag_tools)
+rag_with_tools = gpt_5_mini.bind_tools(rag_tools)
 rag_chain = rag_prompt_template | rag_with_tools
 
 
